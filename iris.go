@@ -40,7 +40,7 @@ func NewIrisLogger(config *logger.Config) iris.Handler {
 			//将添加到日志中。
 			//如果不为空然后它的内容来自`ctx.GetHeader（“User-Agent”）
 			MessageHeaderKeys: []string{UserAgentKey},
-			LogFuncCtx: func(ctx context.Context, latency time.Duration) {
+			LogFuncCtx: func(ctx iris.Context, latency time.Duration) {
 				var file, line = ctx.HandlerFileLine()
 				Infof3(" ❀  %s:%d |trace=%s |latency=%s |status=%d |method=%s |path=%s |message=%s |user-agent=%s",
 					file, line,
