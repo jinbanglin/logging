@@ -37,7 +37,7 @@ func SetupLogger(config *Logger) {
 		gLogger = &Logger{
 			look:            coreDead,
 			FileName:        fileName,
-			FileBufSize:     200 * MB,
+			FileBufSize:     2 * MB,
 			Path:            filepath.Join(getCurrentDirectory(), fileName),
 			FileMaxSize:     1024 * MB,
 			Bucket:          make(chan *bytebufferpool.ByteBuffer, 1024),
