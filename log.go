@@ -70,6 +70,7 @@ func SetupLogger(config *Logger) {
 		if config.ContextTraceKey == "" {
 			config.ContextTraceKey = TraceContextKey
 		}
+
 		config.lock = &sync.RWMutex{}
 		gLogger = config
 	}
@@ -201,7 +202,7 @@ func Infof3(format string, msg ...interface{}) {
 }
 
 func flow(lvl level, buf *bytebufferpool.ByteBuffer) {
-	if gLogger.sendEmail != nil && lvl >= _ERR {
+	if gLogger.sendEmail && lvl >= _ERR {
 		helper.EmailInstance().SendMail(buf.String())
 	}
 	switch gLogger.Persist {

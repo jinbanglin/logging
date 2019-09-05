@@ -3,7 +3,6 @@ package log
 import (
 	"bufio"
 	"github.com/jinbanglin/bytebufferpool"
-	"github.com/jinbanglin/helper"
 	"os"
 	"sync"
 )
@@ -29,7 +28,7 @@ type Logger struct {
 	closeSignal     chan string
 	sigChan         chan os.Signal
 	Persist         int
-	sendEmail       *helper.Email
+	sendEmail       bool
 	RingInterval    int
 	ContextTraceKey string
 }
