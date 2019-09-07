@@ -7,6 +7,7 @@ import (
 	"github.com/jinbanglin/bytebufferpool"
 	"github.com/jinbanglin/helper"
 	"github.com/kataras/iris"
+	"github.com/spf13/viper"
 	"os"
 	"os/signal"
 	"path"
@@ -23,7 +24,7 @@ import (
 
 func init() {
 	if gLogger == nil {
-		SetupLogger(nil)
+		ChaosLogger()
 	}
 }
 
@@ -31,14 +32,14 @@ const tsLayout = "2006.01.02.15.04.05"
 
 var gLogger *Logger
 
-func SetupLogger(config *Logger) {
-	if config == nil {
+func ChaosLogger() {
+	if !viper.GetBool("log.is_config") {
 		fileName := "logs"
 		gLogger = &Logger{
 			look:            coreDead,
 			FileName:        fileName,
 			FileBufSize:     2 * MB,
-			Path:            filepath.Join(getCurrentDirectory(), fileName),
+			Path:            filepath.Join(getCurrentDirectory()),
 			FileMaxSize:     1024 * MB,
 			Bucket:          make(chan *bytebufferpool.ByteBuffer, 1024),
 			closeSignal:     make(chan string),
@@ -49,33 +50,28 @@ func SetupLogger(config *Logger) {
 			ContextTraceKey: TraceContextKey,
 		}
 	} else {
-		config.look = coreDead
-		config.Path = filepath.Join(config.Path, config.FileName)
-		config.closeSignal = make(chan string)
-		if config.FileName == "" {
-			config.FileName = "logs"
+		var persist = OUT_STDOUT
+		if viper.GetString("log.out") == "file" {
+			persist = OUT_FILE
 		}
-		if config.FileMaxSize <= 0 {
-			config.FileMaxSize = 1024 * MB
+		gLogger = &Logger{
+			look:            coreDead,
+			Path:            viper.GetString("log.filepath"),
+			link:            viper.GetString("log.linkname"),
+			FileMaxSize:     viper.GetInt("log.maxsize") * MB,
+			FileBufSize:     viper.GetInt("log.bufsize") * MB,
+			Bucket:          make(chan *bytebufferpool.ByteBuffer, viper.GetInt("log.bucketlen")),
+			lock:            &sync.RWMutex{},
+			closeSignal:     make(chan string),
+			sigChan:         make(chan os.Signal),
+			Persist:         persist,
+			sendEmail:       viper.GetBool("log.send_mail"),
+			RingInterval:    500,
+			ContextTraceKey: TraceContextKey,
 		}
-		if len(config.Bucket) <= 0 {
-			config.Bucket = make(chan *bytebufferpool.ByteBuffer, 1024)
+		if persist == OUT_FILE {
+			go poller()
 		}
-		if config.RingInterval <= 0 {
-			config.RingInterval = 500
-		}
-		if config.Path == "" {
-			config.Path = filepath.Join(getCurrentDirectory(), config.FileName)
-		}
-		if config.ContextTraceKey == "" {
-			config.ContextTraceKey = TraceContextKey
-		}
-
-		config.lock = &sync.RWMutex{}
-		gLogger = config
-	}
-	if gLogger.Persist == OUT_FILE {
-		go poller()
 	}
 }
 
@@ -308,7 +304,7 @@ func Stack(msg ...interface{}) {
 func Debugf2(ctx iris.Context, format string, msg ...interface{}) {
 	buf := bytebufferpool.Get()
 	buf.Write(string2Byte("[DEBU] " + time.Now().Format("01/02/15:04:05") + " " + caller() + "❀ "))
-	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey)+ " |"))
+	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey) + " |"))
 	buf.Write(string2Byte(fmt.Sprintf(format, msg...) + "\n"))
 	flow(_DEBUG, buf)
 }
@@ -316,7 +312,7 @@ func Debugf2(ctx iris.Context, format string, msg ...interface{}) {
 func Infof2(ctx iris.Context, format string, msg ...interface{}) {
 	buf := bytebufferpool.Get()
 	buf.Write(string2Byte("[INFO] " + time.Now().Format("01/02/15:04:05") + " " + caller() + "❀ "))
-	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey)+ " |"))
+	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey) + " |"))
 	buf.Write(string2Byte(fmt.Sprintf(format, msg...) + "\n"))
 	flow(_INFO, buf)
 }
@@ -324,7 +320,7 @@ func Infof2(ctx iris.Context, format string, msg ...interface{}) {
 func Warnf2(ctx iris.Context, format string, msg ...interface{}) {
 	buf := bytebufferpool.Get()
 	buf.Write(string2Byte("[WARN] " + time.Now().Format("01/02/15:04:05") + " " + caller() + "❀ "))
-	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey)+ " |"))
+	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey) + " |"))
 	buf.Write(string2Byte(fmt.Sprintf(format, msg...) + "\n"))
 	flow(_WARN, buf)
 }
@@ -332,7 +328,7 @@ func Warnf2(ctx iris.Context, format string, msg ...interface{}) {
 func Errorf2(ctx iris.Context, format string, msg ...interface{}) {
 	buf := bytebufferpool.Get()
 	buf.Write(string2Byte("[ERRO] " + time.Now().Format("01/02/15:04:05") + " " + caller() + "❀ "))
-	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey)+ " |"))
+	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey) + " |"))
 	buf.Write(string2Byte(fmt.Sprintf(format, msg...) + "\n"))
 	flow(_ERR, buf)
 }
@@ -340,7 +336,7 @@ func Errorf2(ctx iris.Context, format string, msg ...interface{}) {
 func Fatalf2(ctx iris.Context, format string, msg ...interface{}) {
 	buf := bytebufferpool.Get()
 	buf.Write(string2Byte("[FTAL] " + time.Now().Format("01/02/15:04:05") + " " + caller() + "❀ "))
-	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey)+ " |"))
+	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey) + " |"))
 	buf.Write(string2Byte(fmt.Sprintf(format, msg...) + "\n"))
 	flow(_DISASTER, buf)
 }
@@ -348,7 +344,7 @@ func Fatalf2(ctx iris.Context, format string, msg ...interface{}) {
 func Debug2(ctx iris.Context, msg ...interface{}) {
 	buf := bytebufferpool.Get()
 	buf.Write(string2Byte("[DEBU] " + time.Now().Format("01/02/15:04:05") + " " + caller() + "❀ "))
-	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey)+ " |"))
+	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey) + " |"))
 	buf.Write(string2Byte(fmt.Sprintln(msg...)))
 	flow(_DEBUG, buf)
 }
@@ -356,7 +352,7 @@ func Debug2(ctx iris.Context, msg ...interface{}) {
 func Info2(ctx iris.Context, msg ...interface{}) {
 	buf := bytebufferpool.Get()
 	buf.Write(string2Byte("[INFO] " + time.Now().Format("01/02/15:04:05") + " " + caller() + "❀ "))
-	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey)+ " |"))
+	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey) + " |"))
 	buf.Write(string2Byte(fmt.Sprintln(msg...)))
 	flow(_INFO, buf)
 }
@@ -364,7 +360,7 @@ func Info2(ctx iris.Context, msg ...interface{}) {
 func Warn2(ctx iris.Context, msg ...interface{}) {
 	buf := bytebufferpool.Get()
 	buf.Write(string2Byte("[WARN] " + time.Now().Format("01/02/15:04:05") + " " + caller() + "❀ "))
-	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey)+ " |"))
+	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey) + " |"))
 	buf.Write(string2Byte(fmt.Sprintln(msg...)))
 	flow(_WARN, buf)
 }
@@ -372,7 +368,7 @@ func Warn2(ctx iris.Context, msg ...interface{}) {
 func Error2(ctx iris.Context, msg ...interface{}) {
 	buf := bytebufferpool.Get()
 	buf.Write(string2Byte("[ERRO] " + time.Now().Format("01/02/15:04:05") + " " + caller() + "❀ "))
-	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey)+ " |"))
+	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey) + " |"))
 	buf.Write(string2Byte(fmt.Sprintln(msg...)))
 	flow(_ERR, buf)
 }
@@ -380,7 +376,7 @@ func Error2(ctx iris.Context, msg ...interface{}) {
 func Fatal2(ctx iris.Context, msg ...interface{}) {
 	buf := bytebufferpool.Get()
 	buf.Write(string2Byte("[FTAL] " + time.Now().Format("01/02/15:04:05") + " " + caller() + "❀ "))
-	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey)+ " |"))
+	buf.Write(string2Byte(gLogger.ContextTraceKey + "=" + ctx.Values().GetString(TraceContextKey) + " |"))
 	buf.Write(string2Byte(fmt.Sprintln(msg...)))
 	flow(_DISASTER, buf)
 }
@@ -388,4 +384,3 @@ func Fatal2(ctx iris.Context, msg ...interface{}) {
 func string2Byte(s string) []byte {
 	return *(*[]byte)(unsafe.Pointer(&s))
 }
-
