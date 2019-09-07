@@ -23,8 +23,19 @@ import (
 )
 
 func init() {
-	if gLogger == nil {
-		ChaosLogger()
+	gLogger = &Logger{
+		look:            coreDead,
+		FileBufSize:     2 * MB,
+		link:            "moss",
+		Path:            filepath.Join(getCurrentDirectory(), "logs"),
+		FileMaxSize:     1024 * MB,
+		Bucket:          make(chan *bytebufferpool.ByteBuffer, 1024),
+		closeSignal:     make(chan string),
+		lock:            &sync.RWMutex{},
+		sigChan:         make(chan os.Signal),
+		Persist:         OUT_STDOUT,
+		ringInterval:    500,
+		ContextTraceKey: TraceContextKey,
 	}
 }
 
@@ -33,30 +44,10 @@ const tsLayout = "2006.01.02.15.04.05"
 var gLogger *Logger
 
 func ChaosLogger() {
-	if !viper.GetBool("log.is_config") {
-		fileName := "logs"
+	if viper.GetBool("log.reconfig") {
 		gLogger = &Logger{
-			look:            coreDead,
-			FileName:        fileName,
-			FileBufSize:     2 * MB,
-			Path:            filepath.Join(getCurrentDirectory()),
-			FileMaxSize:     1024 * MB,
-			Bucket:          make(chan *bytebufferpool.ByteBuffer, 1024),
-			closeSignal:     make(chan string),
-			lock:            &sync.RWMutex{},
-			sigChan:         make(chan os.Signal),
-			Persist:         OUT_STDOUT,
-			RingInterval:    500,
-			ContextTraceKey: TraceContextKey,
-		}
-	} else {
-		var persist = OUT_STDOUT
-		if viper.GetString("log.out") == "file" {
-			persist = OUT_FILE
-		}
-		gLogger = &Logger{
-			look:            coreDead,
-			Path:            viper.GetString("log.filepath"),
+			look: coreDead,
+			Path:            path.Join(viper.GetString("log.filepath")),
 			link:            viper.GetString("log.linkname"),
 			FileMaxSize:     viper.GetInt("log.maxsize") * MB,
 			FileBufSize:     viper.GetInt("log.bufsize") * MB,
@@ -64,19 +55,19 @@ func ChaosLogger() {
 			lock:            &sync.RWMutex{},
 			closeSignal:     make(chan string),
 			sigChan:         make(chan os.Signal),
-			Persist:         persist,
 			sendEmail:       viper.GetBool("log.send_mail"),
-			RingInterval:    500,
+			ringInterval:    500,
 			ContextTraceKey: TraceContextKey,
 		}
-		if persist == OUT_FILE {
+		if viper.GetString("log.out") == "file" {
+			gLogger.Persist = OUT_FILE
 			go poller()
 		}
 	}
 }
 
 func (l *Logger) loadCurLogFile() error {
-	l.link = filepath.Join(l.Path, gLogger.FileName+".log")
+	l.link = filepath.Join(l.Path, gLogger.link+".log")
 	actFileName, ok := isLinkFile(l.link)
 	if !ok {
 		return errors.New(l.link + " is not link file or not exist")

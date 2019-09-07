@@ -10,8 +10,9 @@ import (
 )
 
 const TraceContextKey = "trace"
-const LoggerMessageKey = "logger_message"
+const LoggerMessageKey = "message"
 const UserAgentKey = "User-Agent"
+const ResponseDataKey = "data"
 
 var excludeExtensions = [...]string{
 	".js",
@@ -42,15 +43,23 @@ func NewIrisLogger(config *logger.Config) iris.Handler {
 			MessageHeaderKeys: []string{UserAgentKey},
 			LogFuncCtx: func(ctx iris.Context, latency time.Duration) {
 				var file, line = ctx.HandlerFileLine()
-				Infof3(" ❀  %s:%d |trace=%s |latency=%s |status=%d |method=%s |path=%s |message=%s |user-agent=%s",
+				var messsage = ""
+				if ctx.GetStatusCode() == iris.StatusOK {
+					messsage = string(ctx.Values().Get(ResponseDataKey).([]byte))
+					ctx.WriteString(messsage)
+				} else {
+					messsage = ctx.Values().GetString(LoggerMessageKey)
+				}
+				Infof3(" ❀  %s:%d |trace=%s |latency=%s |status=%d |method=%s |path=%s |message=%s |user-agent=%s |ip=%s",
 					file, line,
 					ctx.Values().GetString(TraceContextKey),
 					latency.String(),
 					ctx.GetStatusCode(),
 					ctx.Method(),
 					ctx.Path(),
-					ctx.Values().GetString(LoggerMessageKey),
+					messsage,
 					ctx.GetHeader(UserAgentKey),
+					ctx.RemoteAddr(),
 				)
 			},
 		}

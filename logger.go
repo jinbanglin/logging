@@ -29,6 +29,6 @@ type Logger struct {
 	sigChan         chan os.Signal
 	Persist         int
 	sendEmail       bool
-	RingInterval    int
+	ringInterval    int
 	ContextTraceKey string
 }

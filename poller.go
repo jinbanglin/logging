@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"sync/atomic"
 	"time"
 )
@@ -8,12 +9,13 @@ import (
 func poller() {
 	atomic.SwapUint32(&gLogger.look, coreRunning)
 	if err := gLogger.loadCurLogFile(); err != nil {
+		fmt.Println("----------",err)
 		if err = gLogger.createFile(); err != nil {
 			panic(err)
 		}
 	}
 	go gLogger.signalHandler()
-	ticker := time.NewTicker(time.Millisecond * time.Duration(gLogger.RingInterval))
+	ticker := time.NewTicker(time.Millisecond * time.Duration(gLogger.ringInterval))
 	now := time.Now()
 	next := now.Add(time.Hour * 24)
 	next = time.Date(
